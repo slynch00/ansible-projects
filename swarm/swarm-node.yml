@@ -1,0 +1,155 @@
+---
+- hosts: <hosts from inventory>
+  gather_facts: no
+  remote_user: <username>
+  become: true
+  become_method: sudo
+  become_user: root
+
+  vars_prompt:
+    - name: "basename"
+      prompt: "What is the name of the swarm?"
+      default: docker-machine-manager-test
+      private: no
+
+    - name: "worker_name"
+      prompt: "What is the base name of the workers in the swarm?"
+      default: docker-machine-worker-test
+      private: no
+
+    - name: "count"
+      prompt: "How many managers to build?"
+      default: 3
+      private: no
+
+    - name: "w_count"
+      prompt: "How many swarm workers to start with?"
+      default: 3
+      private: no       
+
+  tasks:
+
+# install docker-machine on the scheduler if needed  
+# set to new for a scheduler needing docker-machine and setup
+  - set_fact: scheduler="done" 
+
+# control for setting up new machines
+# set to new for new swarm managers and swarm workers
+  - set_fact: build="new" 
+
+# set operating system variables for docker-swarm installation  
+  - name: set uname1   
+    command: "uname -s"
+    register: uname1 
+  - set_fact: uname1={{ uname1.stdout }}
+
+  - name: set uname2
+    command: "uname -m"
+    register: uname2 
+  - set_fact: uname2={{ uname2.stdout }}
+
+# set the base name for the swarm cluster
+  - set_fact: universal_name="{{ basename }}"
+
+# set the swarm leader name
+  - set_fact: leader="{{ universal_name }}-01"
+
+# create an array for the additional managers in the swarm
+  - set_fact: managers="{{ item }}"
+    with_sequence: start=2 end="{{ count }}" stride=1 format={{ universal_name }}-%02x
+    register: list_items
+
+  - name: create swarm manager list
+    set_fact: managers="{{ list_items.results | map(attribute='ansible_facts.managers') | list }}"
+
+  # create an array for the additional workers in the swarm
+  - set_fact: workers="{{ item }}"
+    with_sequence: start=1 end="{{ w_count }}" stride=1 format={{ worker_name }}-%02x
+    register: list_worker_names
+
+  - name: create swarm worker list
+    set_fact: workers="{{ list_worker_names.results | map(attribute='ansible_facts.workers') | list }}"
+  
+# install docker-machine on the scheduler
+  - name: download docker-machine
+    get_url:
+      url: https://github.com/docker/machine/releases/download/v0.14.0/docker-machine-{{ uname1 }}-{{ uname2 }}
+      dest: /tmp/docker-machine
+      mode: 0755
+    when: scheduler == "new"
+
+  - name: docker-machine setup
+    command: "cp /tmp/docker-machine /usr/local/bin/docker-machine"
+    when: scheduler == "new"
+
+# use docker-machine to set up the swarm managers
+  - name: building docker-machine managers
+    command: "docker-machine create -d amazonec2 \
+    --amazonec2-access-key <access key> \
+    --amazonec2-secret-key <secret key> \
+    --amazonec2-region <region> \
+    --amazonec2-vpc-id <vpc> \
+    --amazonec2-subnet-id <subnet> \
+    --amazonec2-use-private-address \
+    --amazonec2-security-group=<docker security group> \
+    --amazonec2-private-address-only \
+    --amazonec2-ami <ami> \
+    --amazonec2-instance-type t2.medium \
+    --amazonec2-root-size 20 \
+    --amazonec2-zone d {{ item }}"
+    with_items:
+      - "{{ leader }}"
+      - "{{ managers }}"
+    when: build == "new"
+
+# use docker-machine to set up the swarm workers
+  - name: building docker-machine workers
+    command: "docker-machine create -d amazonec2 \
+    --amazonec2-access-key <access-key> \
+    --amazonec2-secret-key <secret key> \
+    --amazonec2-region <region> \
+    --amazonec2-vpc-id <vpc> \
+    --amazonec2-subnet-id <subnet> \
+    --amazonec2-use-private-address \
+    --amazonec2-security-group=<docker security group> \
+    --amazonec2-private-address-only \
+    --amazonec2-ami <ami> \
+    --amazonec2-instance-type t2.medium \
+    --amazonec2-root-size 20 \
+    --amazonec2-zone d {{ item }}"
+    with_items:
+      - "{{ workers }}"
+    when: build == "new"
+
+# transfer a script to initiate the swarm leader
+  - name: Transfer the swarm leader script
+    copy: src=init_swarm.sh dest=/root mode=0777
+
+# insert the ip address of the swarm leader into the shell script  
+  - name: update shell script
+    command: "sed -i 's/leader_address/{{ leader }}/g' /root/init_swarm.sh"
+
+  - copy: content={{ list_items.results }} dest=/root/manager_list mode=0777
+
+  - copy: content={{ list_worker_names.results }} dest=/root/worker_list mode=0777
+
+# execute the shell script to initiate the swarm on the leader
+  - name: Execute the swarm leader script
+    command: sh /root/init_swarm.sh
+
+###################################
+# Clean up
+###################################
+
+#clean up by removing the swarm script from the scheduler
+  #- name: Remove swarm leader script
+  #  command: "rm -f /root/init_swarm.sh"
+
+#clean up by removing the swarm script from the scheduler
+  #- name: Remove manager list
+  #  command: "rm -f /root/manager*"
+
+#clean up by removing the swarm script from the scheduler
+  #- name: Remove temp files
+  #  command: "rm -f /root/temp*"
+

@@ -1,13 +1,15 @@
 ---
-- hosts: <hosts from inventory>
+- hosts: <host reference from hosts.yml>
   gather_facts: no
-  remote_user: <username>
+  remote_user: <ssh username or service account on servers>
   become: true
   become_method: sudo
   become_user: root
+  #The above is an example for ubuntu. Centos is different
+  #Consider moving the above into the hosts.yml  file for management outside of playbook
 
   vars_prompt:
-    - name: "basename"
+    - name: "manager_name"
       prompt: "What is the name of the swarm?"
       default: docker-machine-manager-test
       private: no
@@ -17,7 +19,7 @@
       default: docker-machine-worker-test
       private: no
 
-    - name: "count"
+    - name: "m_count"
       prompt: "How many managers to build?"
       default: 3
       private: no
@@ -48,15 +50,12 @@
     register: uname2 
   - set_fact: uname2={{ uname2.stdout }}
 
-# set the base name for the swarm cluster
-  - set_fact: universal_name="{{ basename }}"
-
 # set the swarm leader name
-  - set_fact: leader="{{ universal_name }}-01"
+  - set_fact: leader="{{ manager_name }}-01"
 
 # create an array for the additional managers in the swarm
   - set_fact: managers="{{ item }}"
-    with_sequence: start=2 end="{{ count }}" stride=1 format={{ universal_name }}-%02x
+    with_sequence: start=2 end="{{ m_count }}" stride=1 format={{ manager_name }}-%02x
     register: list_items
 
   - name: create swarm manager list
@@ -85,16 +84,16 @@
 # use docker-machine to set up the swarm managers
   - name: building docker-machine managers
     command: "docker-machine create -d amazonec2 \
-    --amazonec2-access-key <access key> \
-    --amazonec2-secret-key <secret key> \
-    --amazonec2-region <region> \
-    --amazonec2-vpc-id <vpc> \
-    --amazonec2-subnet-id <subnet> \
+    --amazonec2-access-key <AWS ACCESS KEY> \
+    --amazonec2-secret-key <AWS SECRET> \
+    --amazonec2-region <AWS REGION>  \
+    --amazonec2-vpc-id <AWS VPC> \
+    --amazonec2-subnet-id <AWS SUBNET>  \
     --amazonec2-use-private-address \
-    --amazonec2-security-group=<docker security group> \
+    --amazonec2-security-group=<SECURITY GROUP> \
     --amazonec2-private-address-only \
-    --amazonec2-ami <ami> \
-    --amazonec2-instance-type t2.medium \
+    --amazonec2-ami <HOST AMI> \
+    --amazonec2-instance-type <INSTANCE TYPE> \
     --amazonec2-root-size 20 \
     --amazonec2-zone d {{ item }}"
     with_items:
@@ -105,16 +104,16 @@
 # use docker-machine to set up the swarm workers
   - name: building docker-machine workers
     command: "docker-machine create -d amazonec2 \
-    --amazonec2-access-key <access-key> \
-    --amazonec2-secret-key <secret key> \
-    --amazonec2-region <region> \
-    --amazonec2-vpc-id <vpc> \
-    --amazonec2-subnet-id <subnet> \
+    --amazonec2-access-key <AWS ACCESS KEY> \
+    --amazonec2-secret-key <AWS SECRET KEY> \
+    --amazonec2-region <AWS REGION> \
+    --amazonec2-vpc-id <AWS VPC> \
+    --amazonec2-subnet-id <AWS SUBNET> \
     --amazonec2-use-private-address \
-    --amazonec2-security-group=<docker security group> \
+    --amazonec2-security-group=<SECURITY GROUP> \
     --amazonec2-private-address-only \
-    --amazonec2-ami <ami> \
-    --amazonec2-instance-type t2.medium \
+    --amazonec2-ami <HOST AMI> \
+    --amazonec2-instance-type <INSTANCE TYPE> \
     --amazonec2-root-size 20 \
     --amazonec2-zone d {{ item }}"
     with_items:
@@ -141,15 +140,9 @@
 # Clean up
 ###################################
 
-#clean up by removing the swarm script from the scheduler
-  #- name: Remove swarm leader script
-  #  command: "rm -f /root/init_swarm.sh"
 
-#clean up by removing the swarm script from the scheduler
-  #- name: Remove manager list
-  #  command: "rm -f /root/manager*"
-
-#clean up by removing the swarm script from the scheduler
-  #- name: Remove temp files
-  #  command: "rm -f /root/temp*"
+rm -f /root/manager*
+rm -f /root/worker*
+rm -f /root/init*
+rm -f /root/swarm*
 

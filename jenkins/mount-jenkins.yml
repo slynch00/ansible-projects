@@ -1,0 +1,29 @@
+---
+- hosts: <name of swarm workers in inventory>
+  gather_facts: no
+  remote_user: <name>
+  become: true
+  become_method: sudo
+  become_user: root
+
+  tasks:
+  - name: create directory   
+    command: "mkdir -p /mnt/jenkins"
+
+  #- name: clear swarm jenkins mount directory   
+  #  command: "rm -rf /mnt/jenkins"  
+
+  - name: Install the package nfs4
+    apt:
+      name: nfs-common
+      state: present
+
+  - name: Mount the jenkins data directory
+    mount:
+      path: /mnt/jenkins
+      src: <arn or ip of efs>:/
+      fstype: nfs4
+      state: mounted
+
+  - name: Change ownership of local mount directory
+    command: "chown -R 1000 /mnt/jenkins"

@@ -1,0 +1,30 @@
+{
+    "Version": "2008-10-17",
+    "Id": "PolicyXXXXXXXXXXX",
+    "Statement": [{
+            "Sid": "AllowRunner",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::<id>:root"
+            },
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::bucket_name/*",
+                "arn:aws:s3:::bucket_name"
+            ]
+        },
+        {
+            "Sid": "AllowReview",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::bucket_name/*",
+            "Condition": {
+                "IpAddress": {
+                    "aws:SourceIp": "<proxyip>/<mask>"
+                }
+            }
+        }
+    ]
+}
+

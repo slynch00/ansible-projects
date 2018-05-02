@@ -11,4 +11,4 @@ This project captures the steps used to build a Jenkins deployment with high ava
 ### OBJECTIVE
 The objective is to complete an installation that is resilient to availability failure. Success criteria will be for events such as killing the Jenkins service or adding new containers results in no loss of data for users, plugins and jobs. 
 
-This ansible script mounts an efs filesystem on each swarm worker so that the jenkins containers can mount that file system as a volume mount for the home director.
+This ansible script mounts an efs filesystem on each swarm worker so that the jenkins containers can mount that file system as a volume mount for the home directory.
